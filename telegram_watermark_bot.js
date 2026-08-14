@@ -8,7 +8,7 @@ const sharp = require("sharp");
 const fs = require("fs");
 const path = require("path");
 
-const BOT_TOKEN = process.env.BOT_TOKEN || "8990050422:AAHAz-pG9hmCnd-5xroYDkZSR3LNFIuM9WQ";
+const BOT_TOKEN = process.env.BOT_TOKEN || "YOUR_TELEGRAM_BOT_TOKEN_HERE";
 
 if (!BOT_TOKEN || BOT_TOKEN.includes("YOUR_TELEGRAM")) {
   console.error("❌ Илтимос, BOT_TOKEN ни .env файлига киритинг!");
@@ -32,6 +32,22 @@ const WATERMARK_CONFIG = {
 // Base64 or path to logo
 const LOGO_DATA = `data:image/svg+xml;utf8,%0A%20%20%20%20%20%20%3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%22300%22%20height%3D%22120%22%20viewBox%3D%220%200%20300%20120%22%3E%0A%20%20%20%20%20%20%20%20%3Crect%20width%3D%22280%22%20height%3D%22100%22%20x%3D%2210%22%20y%3D%2210%22%20rx%3D%2220%22%20fill%3D%22rgba(0%2C0%2C0%2C0.5)%22%20stroke%3D%22white%22%20stroke-width%3D%223%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Ccircle%20cx%3D%2250%22%20cy%3D%2260%22%20r%3D%2225%22%20fill%3D%22%233B82F6%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Cpath%20d%3D%22M42%2060%20L48%2066%20L60%2052%22%20stroke%3D%22white%22%20stroke-width%3D%224%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20fill%3D%22none%22%2F%3E%0A%20%20%20%20%20%20%20%20%3Ctext%20x%3D%2290%22%20y%3D%2252%22%20fill%3D%22white%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-weight%3D%22bold%22%20font-size%3D%2220%22%3EOFFICIAL%20LOGO%3C%2Ftext%3E%0A%20%20%20%20%20%20%20%20%3Ctext%20x%3D%2290%22%20y%3D%2275%22%20fill%3D%22%23E2E8F0%22%20font-family%3D%22Arial%2C%20sans-serif%22%20font-size%3D%2214%22%3E%40telegram_channel%3C%2Ftext%3E%0A%20%20%20%20%20%20%3C%2Fsvg%3E%0A%20%20%20%20`;
 
+// Helper to get active logo buffer (priority: logo.png on disk > base64 fallback)
+function getActiveLogoBuffer() {
+  const localLogoPath = path.join(__dirname, 'logo.png');
+  if (fs.existsSync(localLogoPath)) {
+    return fs.readFileSync(localLogoPath);
+  }
+  if (LOGO_DATA.startsWith('data:image/svg+xml;utf8,')) {
+    const svgContent = decodeURIComponent(LOGO_DATA.replace('data:image/svg+xml;utf8,', ''));
+    return Buffer.from(svgContent);
+  } else if (LOGO_DATA.startsWith('data:image/')) {
+    const base64Data = LOGO_DATA.split(',')[1];
+    return Buffer.from(base64Data, 'base64');
+  }
+  return Buffer.from('<svg width="300" height="80"><text x="10" y="50" fill="white" font-size="30">LOGO</text></svg>');
+}
+
 async function applyWatermark(imageBuffer) {
   const baseImg = sharp(imageBuffer);
   const metadata = await baseImg.metadata();
@@ -39,16 +55,7 @@ async function applyWatermark(imageBuffer) {
   const imgHeight = metadata.height || 600;
 
   // Prepare logo buffer
-  let logoBuffer;
-  if (LOGO_DATA.startsWith('data:image/svg+xml;utf8,')) {
-    const svgContent = decodeURIComponent(LOGO_DATA.replace('data:image/svg+xml;utf8,', ''));
-    logoBuffer = Buffer.from(svgContent);
-  } else if (LOGO_DATA.startsWith('data:image/')) {
-    const base64Data = LOGO_DATA.split(',')[1];
-    logoBuffer = Buffer.from(base64Data, 'base64');
-  } else {
-    logoBuffer = Buffer.from('<svg width="300" height="80"><text x="10" y="50" fill="white" font-size="30">LOGO</text></svg>');
-  }
+  const logoBuffer = getActiveLogoBuffer();
 
   const logoMeta = await sharp(logoBuffer).metadata();
   const logoWidth = logoMeta.width || 200;
