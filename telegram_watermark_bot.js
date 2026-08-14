@@ -1,6 +1,6 @@
 // ========================================================
-// TELEGRAM WATERMARK LOGO BOT (Node.js + Sharp + grammY)
-// Standalone 24/7 Production Script for Render.com
+// TELEGRAM FULL-IMAGE WATERMARK BOT (Node.js + Sharp + grammY)
+// 100% Full-Screen Overlay with '00000000000000.png'
 // ========================================================
 
 const { Bot, InputFile } = require("grammy");
@@ -20,26 +20,30 @@ const bot = new Bot(BOT_TOKEN);
 
 // Watermark sozlamalari
 const WATERMARK_CONFIG = {
-  position: "bottom-right",
-  scale: 25, // Rasmni 25% qismini egallaydigan qulay optimal o'lcham
-  opacity: 0.95,
-  rotation: 0,
-  margin: 20,
-  offsetX: 0,
-  offsetY: 0,
-  replyCaption: "✅ Rasmingizga logotip muvaffaqiyatli joylashtirildi!"
+  opacity: 1.0, // 100% to'liq ko'rinish (kerak bo'lsa 0.9 yoki 0.8 qilishingiz mumkin)
+  replyCaption: "✅ Расмингизга логотип 100% муваффақиятли жойлаштирилди!"
 };
 
-// Logotipni olish (logo.png bo'lsa uni oladi)
+// 00000000000000.png faylini olish
 function getActiveLogoBuffer() {
-  const localLogoPath = path.join(__dirname, "logo.png");
-  if (fs.existsSync(localLogoPath)) {
-    console.log("📁 'logo.png' muvaffaqiyatli yuklandi!");
-    return fs.readFileSync(localLogoPath);
+  const possibleNames = [
+    "00000000000000.png",
+    "logo.png"
+  ];
+
+  for (const name of possibleNames) {
+    const localPath = path.join(__dirname, name);
+    if (fs.existsSync(localPath)) {
+      console.log(`📁 Logotip fayli '${name}' muvaffaqiyatli topildi va yuklandi!`);
+      return fs.readFileSync(localPath);
+    }
   }
-  return Buffer.from('<svg width="300" height="80"><text x="10" y="50" fill="white" font-size="30">LOGO</text></svg>');
+
+  console.warn("⚠️ Maxsus fayl topilmadi, standart o'lcham olinmoqda.");
+  return Buffer.from('<svg width="800" height="600"><text x="100" y="300" fill="white" font-size="60">LOGO</text></svg>');
 }
 
+// Rasmni butun 100% ustiga logotipni qoplash (Full 100% Overlay)
 async function applyWatermark(imageBuffer) {
   const baseImg = sharp(imageBuffer);
   const metadata = await baseImg.metadata();
@@ -47,60 +51,15 @@ async function applyWatermark(imageBuffer) {
   const imgHeight = metadata.height || 600;
 
   const logoBuffer = getActiveLogoBuffer();
-  const logoMeta = await sharp(logoBuffer).metadata();
-  const logoWidth = logoMeta.width || 200;
-  const logoHeight = logoMeta.height || 100;
-  const logoAspect = logoWidth / logoHeight;
 
-  // Rasmdan chiqib ketmaydigan xavfsiz o'lcham hisoblash
-  const margin = Math.max(0, WATERMARK_CONFIG.margin || 20);
-  const maxAllowedW = Math.max(30, imgWidth - margin * 2);
-  const maxAllowedH = Math.max(30, imgHeight - margin * 2);
+  // Logotipni kelgan rasmning 100% aniq eni va bo'yiga to'liq moslab cho'zish
+  let processedLogo = sharp(logoBuffer).resize(imgWidth, imgHeight, {
+    fit: "fill" // 100% butun rasmni to'liq qoplaydi
+  });
 
-  let scaleRatio = (WATERMARK_CONFIG.scale || 25) / 100;
-  if (scaleRatio > 0.6) {
-    scaleRatio = 0.25;
-  }
-
-  let targetLogoWidth = Math.round(imgWidth * scaleRatio);
-  let targetLogoHeight = Math.round(targetLogoWidth / logoAspect);
-
-  if (targetLogoWidth > maxAllowedW) {
-    targetLogoWidth = maxAllowedW;
-    targetLogoHeight = Math.max(10, Math.round(targetLogoWidth / logoAspect));
-  }
-  if (targetLogoHeight > maxAllowedH) {
-    targetLogoHeight = maxAllowedH;
-    targetLogoWidth = Math.max(10, Math.round(targetLogoHeight * logoAspect));
-  }
-
-  let processedLogo = sharp(logoBuffer).resize(targetLogoWidth, targetLogoHeight, { fit: "contain" });
-
-  if (WATERMARK_CONFIG.rotation !== 0) {
-    processedLogo = processedLogo.rotate(WATERMARK_CONFIG.rotation, { background: { r: 0, g: 0, b: 0, alpha: 0 } });
-  }
-
-  const resizedLogoBuffer = await processedLogo.png().toBuffer();
-  const rotatedMeta = await sharp(resizedLogoBuffer).metadata();
-  const finalW = Math.min(imgWidth, rotatedMeta.width || targetLogoWidth);
-  const finalH = Math.min(imgHeight, rotatedMeta.height || targetLogoHeight);
-
-  let left = margin;
-  let top = margin;
-
-  switch (WATERMARK_CONFIG.position) {
-    case "top-left": left = margin; top = margin; break;
-    case "top-right": left = imgWidth - finalW - margin; top = margin; break;
-    case "bottom-left": left = margin; top = imgHeight - finalH - margin; break;
-    case "bottom-right": left = imgWidth - finalW - margin; top = imgHeight - finalH - margin; break;
-    case "center": left = Math.round((imgWidth - finalW) / 2); top = Math.round((imgHeight - finalH) / 2); break;
-    default: left = imgWidth - finalW - margin; top = imgHeight - finalH - margin; break;
-  }
-
-  left = Math.max(0, Math.min(imgWidth - finalW, left + (WATERMARK_CONFIG.offsetX || 0)));
-  top = Math.max(0, Math.min(imgHeight - finalH, top + (WATERMARK_CONFIG.offsetY || 0)));
-
+  let resizedLogoBuffer = await processedLogo.png().toBuffer();
   let compositingBuffer = resizedLogoBuffer;
+
   if (WATERMARK_CONFIG.opacity < 0.99) {
     compositingBuffer = await sharp(resizedLogoBuffer)
       .composite([{
@@ -113,13 +72,13 @@ async function applyWatermark(imageBuffer) {
   }
 
   return baseImg
-    .composite([{ input: compositingBuffer, left, top }])
-    .jpeg({ quality: 92 })
+    .composite([{ input: compositingBuffer, left: 0, top: 0 }])
+    .jpeg({ quality: 95 })
     .toBuffer();
 }
 
 // /start komandasi
-bot.command("start", (ctx) => ctx.reply("Ассалому алайкум! Менга расм жўнатинг, мен унга логотипингизни жойлаб бераман."));
+bot.command("start", (ctx) => ctx.reply("Ассалому алайкум! Менга расм жўнатинг, мен унга 100% логотипингизни жойлаб бераман."));
 
 // Rasmlarni qabul qilish
 bot.on("message:photo", async (ctx) => {
@@ -143,11 +102,11 @@ bot.on("message:photo", async (ctx) => {
   }
 });
 
-// Render.com Web Service Port binding
+// Render.com Web Service Port binding (24/7 rejim)
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("🤖 Telegram Watermark Bot 24/7 rejimda muvaffaqiyatli ishlamoqda!");
+  res.end("🤖 Telegram 100% Watermark Bot 24/7 rejimda muvaffaqiyatli ishlamoqda!");
 });
 
 server.listen(PORT, () => {
@@ -156,4 +115,4 @@ server.listen(PORT, () => {
 
 // Botni ishga tushirish
 bot.start();
-console.log("🚀 Telegram Watermark Bot muvaffaqiyatli ishga tushdi!");
+console.log("🚀 Telegram Watermark Bot (100% Overlay) muvaffaqiyatli ishga tushdi!");
