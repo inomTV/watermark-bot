@@ -21,7 +21,7 @@ const bot = new Bot(BOT_TOKEN);
 // Watermark sozlamalari
 const WATERMARK_CONFIG = {
   position: "bottom-right",
-  scale: 120, // 120% o'lcham
+  scale: 25, // Rasmni 25% qismini egallaydigan qulay optimal o'lcham
   opacity: 0.95,
   rotation: 0,
   margin: 20,
@@ -52,8 +52,27 @@ async function applyWatermark(imageBuffer) {
   const logoHeight = logoMeta.height || 100;
   const logoAspect = logoWidth / logoHeight;
 
-  const targetLogoWidth = Math.round(imgWidth * (WATERMARK_CONFIG.scale / 100));
-  const targetLogoHeight = Math.round(targetLogoWidth / logoAspect);
+  // Rasmdan chiqib ketmaydigan xavfsiz o'lcham hisoblash
+  const margin = Math.max(0, WATERMARK_CONFIG.margin || 20);
+  const maxAllowedW = Math.max(30, imgWidth - margin * 2);
+  const maxAllowedH = Math.max(30, imgHeight - margin * 2);
+
+  let scaleRatio = (WATERMARK_CONFIG.scale || 25) / 100;
+  if (scaleRatio > 0.6) {
+    scaleRatio = 0.25;
+  }
+
+  let targetLogoWidth = Math.round(imgWidth * scaleRatio);
+  let targetLogoHeight = Math.round(targetLogoWidth / logoAspect);
+
+  if (targetLogoWidth > maxAllowedW) {
+    targetLogoWidth = maxAllowedW;
+    targetLogoHeight = Math.max(10, Math.round(targetLogoWidth / logoAspect));
+  }
+  if (targetLogoHeight > maxAllowedH) {
+    targetLogoHeight = maxAllowedH;
+    targetLogoWidth = Math.max(10, Math.round(targetLogoHeight * logoAspect));
+  }
 
   let processedLogo = sharp(logoBuffer).resize(targetLogoWidth, targetLogoHeight, { fit: "contain" });
 
@@ -63,10 +82,9 @@ async function applyWatermark(imageBuffer) {
 
   const resizedLogoBuffer = await processedLogo.png().toBuffer();
   const rotatedMeta = await sharp(resizedLogoBuffer).metadata();
-  const finalW = rotatedMeta.width || targetLogoWidth;
-  const finalH = rotatedMeta.height || targetLogoHeight;
+  const finalW = Math.min(imgWidth, rotatedMeta.width || targetLogoWidth);
+  const finalH = Math.min(imgHeight, rotatedMeta.height || targetLogoHeight);
 
-  const margin = WATERMARK_CONFIG.margin;
   let left = margin;
   let top = margin;
 
@@ -79,8 +97,8 @@ async function applyWatermark(imageBuffer) {
     default: left = imgWidth - finalW - margin; top = imgHeight - finalH - margin; break;
   }
 
-  left = Math.max(0, Math.min(imgWidth - finalW, left + WATERMARK_CONFIG.offsetX));
-  top = Math.max(0, Math.min(imgHeight - finalH, top + WATERMARK_CONFIG.offsetY));
+  left = Math.max(0, Math.min(imgWidth - finalW, left + (WATERMARK_CONFIG.offsetX || 0)));
+  top = Math.max(0, Math.min(imgHeight - finalH, top + (WATERMARK_CONFIG.offsetY || 0)));
 
   let compositingBuffer = resizedLogoBuffer;
   if (WATERMARK_CONFIG.opacity < 0.99) {
@@ -125,7 +143,7 @@ bot.on("message:photo", async (ctx) => {
   }
 });
 
-// Render.com Web Service Port binding (Render port tekshiruvidan muvaffaqiyatli o'tish uchun)
+// Render.com Web Service Port binding
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
