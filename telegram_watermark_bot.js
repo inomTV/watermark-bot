@@ -1,6 +1,6 @@
 // ========================================================
 // TELEGRAM FULL-IMAGE WATERMARK BOT (Node.js + Sharp + grammY)
-// 100% Overlay with '00000000000000.png' + Daily Auto-Clean
+// 100% Overlay + Auto Cleanup + 24/7 Anti-Sleep Auto-Ping
 // ========================================================
 
 const { Bot, InputFile } = require("grammy");
@@ -25,16 +25,14 @@ if (!fs.existsSync(TEMP_DIR)) {
 }
 
 // ----------------------------------------------------
-// 🧹 ҲАР КУНИ ВАҚТИНЧАЛИК РАСМЛАРНИ ЎЧИРИШ ФУНКЦИЯСИ
+// 🧹 ҲАР КУНИ ВАҚТИНЧАЛИК РАСМЛАРНИ ЎЧИРИШ
 // ----------------------------------------------------
 function cleanupOldImages() {
   console.log("🧹 [Daily Cleanup] Расмлар ва кэш тозаланмоқда...");
   try {
-    // 1. Sharp кэшини тўлиқ бўшатиш
     sharp.cache(false);
     sharp.cache(true);
 
-    // 2. Temp папкадаги 1 соатдан ошган барча файлларни ўчириш
     if (fs.existsSync(TEMP_DIR)) {
       const files = fs.readdirSync(TEMP_DIR);
       const now = Date.now();
@@ -43,7 +41,6 @@ function cleanupOldImages() {
       for (const file of files) {
         const filePath = path.join(TEMP_DIR, file);
         const stats = fs.statSync(filePath);
-        // 1 соатдан эски бўлган ҳар қандай файлни ўчириш
         if (now - stats.mtimeMs > 60 * 60 * 1000) {
           fs.unlinkSync(filePath);
           deletedCount++;
@@ -56,9 +53,7 @@ function cleanupOldImages() {
   }
 }
 
-// Ҳар 24 соатда (ҳар куни) автоматик ишга тушади
 setInterval(cleanupOldImages, 24 * 60 * 60 * 1000);
-// Бот ишга тушганда ҳам бир марта тозалайди
 cleanupOldImages();
 
 // ----------------------------------------------------
@@ -69,7 +64,6 @@ const WATERMARK_CONFIG = {
   replyCaption: "✅ Расмингизга логотип 100% муваффақиятли жойлаштирилди!"
 };
 
-// Logotipni olish (00000000000000.png)
 function getActiveLogoBuffer() {
   const possibleNames = [
     "00000000000000.png",
@@ -79,7 +73,6 @@ function getActiveLogoBuffer() {
   for (const name of possibleNames) {
     const localPath = path.join(__dirname, name);
     if (fs.existsSync(localPath)) {
-      console.log(`📁 Logotip fayli '${name}' muvaffaqiyatli yuklandi!`);
       return fs.readFileSync(localPath);
     }
   }
@@ -87,7 +80,6 @@ function getActiveLogoBuffer() {
   return Buffer.from('<svg width="800" height="600"><text x="100" y="300" fill="white" font-size="60">LOGO</text></svg>');
 }
 
-// 100% Overlay qoplash
 async function applyWatermark(imageBuffer) {
   const baseImg = sharp(imageBuffer);
   const metadata = await baseImg.metadata();
@@ -120,16 +112,13 @@ async function applyWatermark(imageBuffer) {
     .toBuffer();
 }
 
-// /start buyrug'i
 bot.command("start", (ctx) => ctx.reply("Ассалому алайкум! Менга расм жўнатинг, мен унга 100% логотипингизни жойлаб бераман."));
 
-// /clean ёки /clear орқали қўлда тозалаш
 bot.command(["clean", "clear"], async (ctx) => {
   cleanupOldImages();
-  await ctx.reply("🧹 Базадаги вақтинчалик расмлар ва кэш муваффақиятли тозаланди!");
+  await ctx.reply("🧹 Базадаги вақтинчалик расмлар ва кэш тозаланди!");
 });
 
-// Rasmlarni qabul qilish
 bot.on("message:photo", async (ctx) => {
   try {
     const photo = ctx.message.photo.pop();
@@ -146,7 +135,6 @@ bot.on("message:photo", async (ctx) => {
       caption: ctx.message.caption || WATERMARK_CONFIG.replyCaption
     });
 
-    // Хотирани бўшатиш (Garbage Collector учун)
     inputBuf.fill(0);
   } catch (err) {
     console.error("Error processing photo:", err);
@@ -154,17 +142,33 @@ bot.on("message:photo", async (ctx) => {
   }
 });
 
-// Render.com Web Service Port binding (24/7 rejim)
+// Render.com Web Server (24/7)
 const PORT = process.env.PORT || 3000;
 const server = http.createServer((req, res) => {
   res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8" });
-  res.end("🤖 Telegram 100% Watermark Bot 24/7 rejimda muvaffaqiyatli ishlamoqda! (Auto-clean active)");
+  res.end("🤖 Telegram Watermark Bot 24/7 rejimda uyg'oq!");
 });
 
 server.listen(PORT, () => {
-  console.log(`🌐 Health check server port ${PORT} da tinglamoqda`);
+  console.log(`🌐 Web server port ${PORT} da tinglamoqda`);
 });
+
+// ----------------------------------------------------
+// ⏰ 24/7 ANTI-SLEEP (УЙҚУГА КЕТМАСЛИК ТИЗИМИ)
+// ----------------------------------------------------
+const SERVER_URL = "https://watermark-bot-5rd3.onrender.com";
+
+setInterval(async () => {
+  try {
+    const response = await fetch(SERVER_URL);
+    if (response.ok) {
+      console.log(" Ping yuborildi: Server doimiy uyg'oq holatda saqlanmoqda.");
+    }
+  } catch (e) {
+    console.warn("⚠️ Ping xatosi (muammo emas):", e.message);
+  }
+}, 10 * 60 * 1000); // Har 10 daqiqada bir marta o'zini turtib uyg'otadi
 
 // Botni ishga tushirish
 bot.start();
-console.log("🚀 Telegram Watermark Bot (100% Overlay + Auto Cleanup) ishga tushdi!");
+console.log("🚀 Telegram Watermark Bot (24/7 Doimiy Ishchi Rejim) ishga tushdi!");
